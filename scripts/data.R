@@ -9,7 +9,6 @@ urledu = "https://data.cityofchicago.org/resource/9xs2-f89t.json"
 urlincome = "https://data.cityofchicago.org/resource/t68z-cikk.json" 
 
 rawedu = fromJSON(urledu)
-rawcrim = fromJSON(urlcrim)
 rawincome = fromJSON(urlincome)
 
 colnames(rawedu)[colnames(rawedu) == "community_area_name"] = "community_area"
@@ -35,21 +34,16 @@ eduAincome <- eduAincome %>%
 
 eduAincome <- eduAincome %>%
   mutate( 
-    middlerate = percent(
+    middlerate = 
       (`_50_000_to_74_999` + `_75_000_to_125_000` + `_125_000`) /
-        (under_25_000 + `_25_000_to_49_999` + `_50_000_to_74_999` + `_75_000_to_125_000` + `_125_000`)
-    ),
+        (under_25_000 + `_25_000_to_49_999` + `_50_000_to_74_999` + `_75_000_to_125_000` + `_125_000`),
     
-    povertyrate = percent(
+    povertyrate = 
       under_25_000 /
-        (under_25_000 + `_25_000_to_49_999` + `_50_000_to_74_999` + `_75_000_to_125_000` + `_125_000`)
-    ),
-    oldrate = percent(
+        (under_25_000 + `_25_000_to_49_999` + `_50_000_to_74_999` + `_75_000_to_125_000` + `_125_000`),
+    oldrate = 
       ((male_65 + female_65)/total_population)
-    )
   )
-
-
 
 
 
@@ -66,4 +60,7 @@ finaldata = eduAincome%>%
     povertyrate,
     middlerate,
     oldrate
-  )
+  )%>%
+  drop_na()
+
+write_csv(finaldata,"finaldata")
