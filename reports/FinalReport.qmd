@@ -249,8 +249,8 @@ ggplot(finaldata, aes(x = oldrate, y = instruction_score)) +
 ### Based on the three visualizations presented, we can deduce the following insights regarding the impact of economic levels and demographics on CPS educational outcomes:In communities with lower poverty rates, college enrollment rates show no drastic fluctuations. However, as poverty rates rise, a marked reduction in data points is observed. This trend may imply that in highly impoverished neighborhoods, college enrollment figures are either unreported or so low that they lack statistical visibility, creating a "data void" in the most vulnerable areas.A strong positive correlation exists between the Performance Policy Level and Safety Scores. This finding aligns with intuitive expectations, confirming that campus safety is a foundational element of a high-quality educational environment; top-rated schools consistently provide safer atmospheres for students.Regarding demographics, communities with an aging rate below 20% show no significant differentiation in instruction quality. The scarcity of samples in high-aging areas aligns with demographic reality: school locations are intrinsically linked to population structure. High-aging communities typically have fewer school-age children, resulting in lower demand for educational facilities. Consequently, aside from the few data points in high-aging zones, the scatter plot reveals no discernible linear correlation between community aging rates and instruction quality.
 
 
-#ML Anlysis
-##decision tree
+# ML Analysis
+## Decision Tree
 ```{r}
 
 school_data = finaldata %>%
