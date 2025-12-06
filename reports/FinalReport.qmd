@@ -1,0 +1,386 @@
+---
+title: "Chicago Public Schools: Socioeconomic Drivers of Education"
+subtitle: "PA 446 Final Project - Fall 2025"
+author: "Zhouxiang Sun"
+date: "2025-12-5"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    code-fold: true
+    code-tools: true
+    df-print: paged
+    self-contained: true
+---
+
+```{r}
+# This project investigates the underlying factors influencing educational outcomes within Chicago Public Schools (CPS). Education does not exist in a vacuum; it is deeply intertwined with the socioeconomic fabric of the neighborhoods where students live.
+
+#By integrating school-level data with community-level socioeconomic indicators—such as "per capita income", "hardship index", and "poverty rates"—this analysis aims to identify structural patterns of inequality. The primary objective is to determine how these external factors correlate with educational attainment and to visualize the spatial distribution of resources across the city. This data-driven approach provides a foundation for more equitable policy decisions and resource allocation.
+```
+# load libraries
+```{r}
+library(tidyverse)
+library(leaflet)
+library(sf)        
+library(htmltools) 
+library(janitor)
+library(ggplot2)
+library(ggcorrplot)
+library(viridis)
+library(rpart)
+library(rpart.plot)
+library(rsample)
+library(caret)
+library(tidymodels)
+library(xgboost)
+library(vip)
+```
+# load data
+```{r}
+file_path = "D:/MSCA/PA446/final/Chicago_Education_Analysis_446Final/data/finaldata"
+finaldata = read.csv("D:/MSCA/PA446/final/Chicago_Education_Analysis_446Final/data/finaldata")
+file_path1 = "D:/MSCA/PA446/final/Chicago_Education_Analysis_446Final/data/incomedata"
+rawincome = read.csv("D:/MSCA/PA446/final/Chicago_Education_Analysis_446Final/data/incomedata")
+```
+# interactive map
+```{r}
+comm_url = "https://data.cityofchicago.org/resource/igwz-8jzy.geojson"
+chi_shapes = read_sf(comm_url) %>%
+  mutate(community_area = str_to_upper(community)) 
+
+map = chi_shapes%>%
+  left_join(rawincome,
+            by = "community_area")
+
+finaldata = finaldata%>%
+  mutate(
+    college_enrollment_rate = as.numeric(college_enrollment_rate),
+    safety_score = as.numeric(safety_score),
+    environment_score = as.numeric(environment_score),
+    instruction_score = as.numeric(instruction_score)
+  )
+
+
+pal_middle  = colorNumeric("Greens",  domain = map$middlerate, na.color = "transparent")
+pal_poverty = colorNumeric("Reds",    domain = map$povertyrate, na.color = "transparent")
+pal_old     = colorNumeric("Purples", domain = map$oldrate, na.color = "transparent")
+
+pal_enroll   = colorNumeric("YlOrRd",  domain = finaldata$college_enrollment_rate, na.color = "transparent")
+pal_safety   = colorNumeric("Blues",   domain = finaldata$safety_score, na.color = "transparent")
+pal_env      = colorNumeric("GnBu",    domain = finaldata$environment_score, na.color = "transparent") 
+pal_instruct = colorNumeric("Oranges", domain = finaldata$instruction_score, na.color = "transparent")
+
+
+policy_levels = unique(finaldata$cps_performance_policy_level)
+pal_policy   = colorFactor("Set1", domain = policy_levels, na.color = "transparent")
+```
+# build map
+```{r}
+#| label: interactive-map
+#| fig-height: 12        
+#| column: body
+
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(
+    data = map,
+    group = "Comm: Poverty Rate",
+    fillColor = ~pal_poverty(povertyrate),
+    weight = 1, color = "white", fillOpacity = 0.7,
+    popup = ~paste("<b>", community, "</b><br>Poverty Rate:", scales::percent(povertyrate, 0.1))
+  ) %>%
+  addPolygons(
+    data = map,
+    group = "Comm: Middle Class",
+    fillColor = ~pal_middle(middlerate),
+    weight = 1, color = "white", fillOpacity = 0.7,
+    popup = ~paste("<b>", community, "</b><br>Middle Class Rate:", scales::percent(middlerate, 0.1))
+  ) %>%
+  addPolygons(
+    data = map,
+    group = "Comm: Old Rate",
+    fillColor = ~pal_old(oldrate),
+    weight = 1, color = "white", fillOpacity = 0.7,
+    popup = ~paste("<b>", community, "</b><br>Old Rate:", scales::percent(oldrate, 0.1))
+  ) %>%
+  addCircleMarkers(
+    data = finaldata %>% filter(!is.na(college_enrollment_rate)), 
+    group = "School: College Enrollment",
+    lng = ~longitude, lat = ~latitude,
+    radius = 5, stroke = TRUE, weight = 1, color = "black",
+    fillColor = ~pal_enroll(college_enrollment_rate), fillOpacity = 0.9,
+    popup = ~paste("<b>", name_of_school, "</b><br>Enrollment:", college_enrollment_rate, "%")
+  ) %>%
+  addCircleMarkers(
+    data = finaldata %>% filter(!is.na(safety_score)), 
+    group = "School: Safety Score",
+    lng = ~longitude, lat = ~latitude,
+    radius = 5, stroke = TRUE, weight = 1, color = "black",
+    fillColor = ~pal_safety(safety_score), fillOpacity = 0.9,
+    popup = ~paste("<b>", name_of_school, "</b><br>Safety Score:", safety_score)
+  ) %>%
+  addCircleMarkers(
+    data = finaldata %>% filter(!is.na(environment_score)),
+    group = "School: Environment",
+    lng = ~longitude, lat = ~latitude,
+    radius = 5, stroke = TRUE, weight = 1, color = "black",
+    fillColor = ~pal_env(environment_score), fillOpacity = 0.9,
+    popup = ~paste("<b>", name_of_school, "</b><br>Environment Score:", environment_score)
+  ) %>%
+  addCircleMarkers(
+    data = finaldata %>% filter(!is.na(instruction_score)),
+    group = "School: Instruction",
+    lng = ~longitude, lat = ~latitude,
+    radius = 5, stroke = TRUE, weight = 1, color = "black",
+    fillColor = ~pal_instruct(instruction_score), fillOpacity = 0.9,
+    popup = ~paste("<b>", name_of_school, "</b><br>Instruction Score:", instruction_score)
+  ) %>%
+  addCircleMarkers(
+    data = finaldata %>% filter(!is.na(cps_performance_policy_level)),
+    group = "School: Policy Level",
+    lng = ~longitude, lat = ~latitude,
+    radius = 5, stroke = TRUE, weight = 1, color = "black",
+    fillColor = ~pal_policy(cps_performance_policy_level), fillOpacity = 0.9,
+    popup = ~paste("<b>", name_of_school, "</b><br>Policy Level:", cps_performance_policy_level)
+  ) %>%
+  addLayersControl(
+    baseGroups = c("Comm: Poverty Rate", "Comm: Middle Class", "Comm: Old Rate"),
+    overlayGroups = c("School: College Enrollment", "School: Safety Score", 
+                      "School: Environment", "School: Instruction", "School: Policy Level"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  addLegend("bottomright", pal = pal_poverty, values = map$povertyrate,
+            title = "Comm: Poverty", group = "Comm: Poverty Rate",
+            opacity = 0.7,
+            labFormat = labelFormat(suffix = "%", transform = function(x) 100 * x)) %>%
+            
+  addLegend("bottomright", pal = pal_middle, values = map$middlerate,
+            title = "Comm: Middle Class", group = "Comm: Middle Class",
+            opacity = 0.7,
+            labFormat = labelFormat(suffix = "%", transform = function(x) 100 * x)) %>%
+            
+  addLegend("bottomright", pal = pal_old, values = map$oldrate,
+            title = "Comm: Old Rate", group = "Comm: Old Rate",
+            opacity = 0.7,
+            labFormat = labelFormat(suffix = "%", transform = function(x) 100 * x)) %>%
+  addLegend("bottomleft", pal = pal_enroll, 
+            values = (finaldata %>% filter(!is.na(college_enrollment_rate)))$college_enrollment_rate,
+            title = "Enrollment %", group = "School: College Enrollment",
+            opacity = 0.9) %>%
+  addLegend("bottomleft", pal = pal_safety, 
+            values = finaldata$safety_score,
+            title = "Safety Score", group = "School: Safety Score",
+            opacity = 0.9) %>%
+  addLegend("bottomleft", pal = pal_env, 
+            values = finaldata$environment_score,
+            title = "Env Score", group = "School: Environment",
+            opacity = 0.9) %>%
+  addLegend("bottomleft", pal = pal_instruct, 
+            values = finaldata$instruction_score,
+            title = "Instruction", group = "School: Instruction",
+            opacity = 0.9) %>%
+  addLegend("bottomleft", pal = pal_policy, 
+            values = finaldata$cps_performance_policy_level,
+            title = "Policy Level", group = "School: Policy Level",
+            opacity = 0.9)
+```
+### The interactive map allows users to toggle between community-level background layers—including poverty rate, middle-class proportion, and old-age rate—while overlaying CPS performance ratings and teaching quality scores as needed.Through interactive exploration, a significant spatial correlation between educational outcomes and economic status becomes evident:Schools with higher college enrollment rates are predominantly located in wealthier neighborhoods.Schools with higher safety scores are concentrated in Downtown and the North Side. Notably, in the South Side, schools that do achieve high safety scores are primarily clustered within pockets of higher-income communities.
+
+# Other Visualizations
+## Scatter Plot
+```{r}
+ggplot(finaldata, aes(x = povertyrate, y = college_enrollment_rate)) +
+  geom_point(aes(color = cps_performance_policy_level), alpha = 0.7, size = 2.5) +
+  geom_smooth(method = "lm", color = "black", linetype = "dashed", se = TRUE, fill = "gray80") +
+  scale_color_viridis_d(option = "plasma", name = "School Rating", direction = -1) +
+  scale_x_continuous(labels = scales::percent_format()) +
+  labs(
+    title = "Impact of Community Poverty on College Enrollment",
+    x = "Community Poverty Rate",
+    y = "College Enrollment Rate (%)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.position = "bottom"
+  )
+```
+
+## Violin map
+```{r}
+violin_data = finaldata %>%
+  filter(!is.na(cps_performance_policy_level)) %>%
+  filter(cps_performance_policy_level != "Not Enough Data") %>%
+  mutate(cps_performance_policy_level = droplevels(factor(cps_performance_policy_level))) 
+
+ggplot(violin_data, 
+       aes(x = cps_performance_policy_level, y = safety_score, fill = cps_performance_policy_level)) +
+  geom_violin(alpha = 0.6, trim = FALSE, color = NA) +
+  geom_boxplot(width = 0.15, fill = "white", color = "black", alpha = 0.8, outlier.shape = NA) +
+  scale_fill_brewer(palette = "Set2", name = "School Rating") +
+  labs(
+    title = "School Safety Score Distribution by Rating",
+    subtitle = "Top-rated schools (Level 1+) show significantly higher safety scores consistency.",
+    x = "CPS Performance Policy Level",
+    y = "Safety Score (0-99)"
+  ) +
+  theme_classic() +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    legend.position = "none", 
+    axis.text.x = element_text(size = 11)
+  )
+```
+## Old Rate vs. Instruction Score
+```{r}
+ggplot(finaldata, aes(x = oldrate, y = instruction_score)) +
+  geom_point(alpha = 0.4, color = "gray50", size = 2) +
+  geom_smooth(method = "loess", color = "#2c7bb6", size = 1.5, fill = "#abd9e9") +
+  scale_x_continuous(labels = scales::percent_format(), name = "Community Old Age Rate") +
+  scale_y_continuous(name = "Instruction Score") +
+  labs(
+    title = "Non-linear Trend: Aging Rate vs. Instruction Score"
+  ) +
+  theme_classic() +
+  theme(plot.title = element_text(face = "bold"))
+```
+### Based on the three visualizations presented, we can deduce the following insights regarding the impact of economic levels and demographics on CPS educational outcomes:In communities with lower poverty rates, college enrollment rates show no drastic fluctuations. However, as poverty rates rise, a marked reduction in data points is observed. This trend may imply that in highly impoverished neighborhoods, college enrollment figures are either unreported or so low that they lack statistical visibility, creating a "data void" in the most vulnerable areas.A strong positive correlation exists between the Performance Policy Level and Safety Scores. This finding aligns with intuitive expectations, confirming that campus safety is a foundational element of a high-quality educational environment; top-rated schools consistently provide safer atmospheres for students.Regarding demographics, communities with an aging rate below 20% show no significant differentiation in instruction quality. The scarcity of samples in high-aging areas aligns with demographic reality: school locations are intrinsically linked to population structure. High-aging communities typically have fewer school-age children, resulting in lower demand for educational facilities. Consequently, aside from the few data points in high-aging zones, the scatter plot reveals no discernible linear correlation between community aging rates and instruction quality.
+
+#ML Anlysis
+##decision tree
+```{r}
+
+school_data = finaldata %>%
+  select(
+    college_enrollment_rate, 
+    safety_score, 
+    instruction_score, 
+    povertyrate, 
+    middlerate, 
+    oldrate,
+    cps_performance_policy_level
+  ) %>%
+  drop_na() %>%
+  mutate(
+    cps_performance_policy_level = as.factor(cps_performance_policy_level)
+  )
+
+tree_spec = decision_tree(
+  tree_depth = 4,        
+  cost_complexity = 0.01 
+) %>%
+  set_engine("rpart") %>%
+  set_mode("regression") 
+
+tree_fit = workflow() %>%
+  add_model(tree_spec) %>%
+  add_formula(college_enrollment_rate ~ safety_score + instruction_score + povertyrate + oldrate) %>%
+  fit(data = school_data)
+
+education_tree = tree_fit %>% extract_fit_parsnip() %>% pluck("fit")
+
+op = par(no.readonly = TRUE)
+on.exit(par(op), add = TRUE)
+par(mar = c(1, 1, 1, 1)) 
+
+rpart.plot(
+  education_tree,
+  type = 4,           
+  extra = 101,        
+  under = TRUE,       
+  fallen.leaves = FALSE, 
+  digits = 3,         
+  box.palette = "GnBu", 
+  main = "Decision Tree: Predictors of College Enrollment Rate"
+)
+```
+## XGboost
+```{r}
+train_set = finaldata %>%
+  filter(!is.na(college_enrollment_rate)) %>%
+  drop_na(safety_score, instruction_score, povertyrate, middlerate, oldrate, cps_performance_policy_level)
+
+predict_set = finaldata %>%
+  filter(is.na(college_enrollment_rate)) %>%
+  drop_na(safety_score, instruction_score, povertyrate, middlerate, oldrate, cps_performance_policy_level)
+
+xgb_spec = boost_tree(
+  trees = 1000,
+  tree_depth = 6,
+  min_n = 5,
+  loss_reduction = 0.01,
+  sample_size = 0.8,
+  learn_rate = 0.01
+) %>%
+  set_engine("xgboost") %>%
+  set_mode("regression")
+
+xgb_recipe = recipe(college_enrollment_rate ~ safety_score + instruction_score + povertyrate + middlerate + oldrate + cps_performance_policy_level, 
+                    data = train_set) %>%
+  step_dummy(all_nominal_predictors()) 
+
+xgb_workflow = workflow() %>%
+  add_model(xgb_spec) %>%
+  add_recipe(xgb_recipe)
+
+xgb_fit = xgb_workflow %>%
+  fit(data = train_set)
+
+xgb_fit %>%
+  extract_fit_parsnip() %>%
+  vip(geom = "col", aesthetics = list(fill = "steelblue")) + 
+  theme_minimal() +
+  labs(title = "XGBoost Feature Importance for Imputation")
+
+# Validation
+set.seed(123)
+folds = vfold_cv(train_set, v = 5)
+
+
+xgb_resamples = fit_resamples(
+  xgb_workflow,
+  resamples = folds,
+  metrics = metric_set(rmse, rsq, mae) 
+)
+
+
+model_metrics = collect_metrics(xgb_resamples)
+
+print(model_metrics)
+
+
+final_fit = fit(xgb_workflow, data = train_set)
+
+
+results_for_plot = train_set %>%
+  bind_cols(predict(final_fit, new_data = train_set)) %>%
+  rename(predicted_enrollment = .pred)
+
+
+ggplot(results_for_plot, aes(x = college_enrollment_rate, y = predicted_enrollment)) +
+  geom_point(alpha = 0.6, color = "#2c7bb6") +
+  geom_abline(lty = 2, color = "red", size = 1) +
+  coord_obs_pred() + 
+  
+  labs(
+    title = "Model Evaluation: Actual vs. Predicted Enrollment",
+    subtitle = "Points closer to the red dashed line indicate better predictions.",
+    x = "Actual College Enrollment Rate (%)",
+    y = "Predicted College Enrollment Rate (%)"
+  ) +
+  theme_minimal()
+```
+
+### I initially employed a Decision Tree analysis to identify the primary drivers of college enrollment, which revealed that Safety Score was the most significant variable. This finding was subsequently corroborated by the XGBoost algorithm. I then trained the XGBoost model to predict college enrollment rates across CPS schools based on a broader set of variables. Validation metrics demonstrate that the model achieved a high degree of predictive accuracy.
+
+
+
+
+
+
+
+
+
+
