@@ -1,0 +1,120 @@
+---
+title: "Chicago Education Report: `r params$community_name`"
+subtitle: "PA 446 Final Project - Fall 2025"
+author: "Zhouxiang Sun"
+date: "2025-12-5"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    code-fold: true
+    code-tools: true
+    df-print: paged
+    self-contained: true
+params:
+  community_name: "LINCOLN PARK" 
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+# Load Libraries
+library(tidyverse)
+library(leaflet)
+library(sf)        
+library(htmltools) 
+library(janitor)
+library(ggplot2)
+library(viridis)
+```
+
+```{r}
+#| label: load-data
+#| include: false
+
+
+finaldata = read.csv("D:/MSCA/PA446/final/Chicago_Education_Analysis_446Final/data/finaldata")
+rawincome = read.csv("D:/MSCA/PA446/final/Chicago_Education_Analysis_446Final/data/incomedata")
+
+
+finaldata = finaldata %>%
+  mutate(
+    college_enrollment_rate = as.numeric(college_enrollment_rate),
+    safety_score = as.numeric(safety_score),
+    environment_score = as.numeric(environment_score),
+    instruction_score = as.numeric(instruction_score),
+    community_area = str_to_upper(community_area) 
+  )
+
+rawincome = rawincome %>%
+  mutate(community_area = str_to_upper(community_area))
+```
+
+```{r}
+#| label: global-map
+#| fig-height: 8
+#| column: body
+#| echo: false
+#| message: false
+
+
+comm_url = "https://data.cityofchicago.org/resource/igwz-8jzy.geojson"
+chi_shapes = read_sf(comm_url) %>%
+  mutate(community_area = str_to_upper(community)) 
+
+map_data = chi_shapes %>% left_join(rawincome, by = "community_area")
+
+
+pal_poverty = colorNumeric("Reds", domain = map_data$povertyrate, na.color = "transparent")
+pal_enroll  = colorNumeric("YlOrRd", domain = finaldata$college_enrollment_rate, na.color = "transparent")
+
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolygons(
+    data = map_data,
+    fillColor = ~pal_poverty(povertyrate),
+    weight = 1, color = "white", fillOpacity = 0.5,
+    popup = ~paste(community, "<br>Poverty:", scales::percent(povertyrate, 0.1))
+  ) %>%
+  addCircleMarkers(
+    data = finaldata %>% filter(!is.na(college_enrollment_rate)),
+    lng = ~longitude, lat = ~latitude,
+    radius = 4, stroke = FALSE, fillOpacity = 0.8, color = "black",
+    fillColor = ~pal_enroll(college_enrollment_rate),
+    popup = ~paste(name_of_school, "<br>Enrollment:", college_enrollment_rate)
+  ) %>%
+  addLegend("bottomright", pal = pal_poverty, values = map_data$povertyrate, title = "Comm: Poverty")
+```
+
+```{r}
+#| label: local-analysis
+#| echo: false
+
+
+local_school_data <- finaldata %>%
+  filter(community_area == params$community)
+
+
+if(nrow(local_school_data) > 0) {
+  avg_enroll <- mean(local_school_data$college_enrollment_rate, na.rm = TRUE)
+  avg_safety <- mean(local_school_data$safety_score, na.rm = TRUE)
+  
+  cat(paste0("**Community Summary:**\n\n",
+             "- **Number of Schools:** ", nrow(local_school_data), "\n",
+             "- **Avg College Enrollment:** ", round(avg_enroll, 1), "%\n",
+             "- **Avg Safety Score:** ", round(avg_safety, 1), "\n\n"))
+  cat("### School List\n")
+  local_school_data %>%
+    select(name_of_school, college_enrollment_rate, safety_score, instruction_score) %>%
+    arrange(desc(college_enrollment_rate)) %>%
+    knitr::kable()
+    
+} else {
+  cat("No school data found for this community area in the dataset.")
+}
+```
+
+
+
