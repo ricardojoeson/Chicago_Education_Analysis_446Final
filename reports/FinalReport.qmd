@@ -248,6 +248,7 @@ ggplot(finaldata, aes(x = oldrate, y = instruction_score)) +
 ```
 ### Based on the three visualizations presented, we can deduce the following insights regarding the impact of economic levels and demographics on CPS educational outcomes:In communities with lower poverty rates, college enrollment rates show no drastic fluctuations. However, as poverty rates rise, a marked reduction in data points is observed. This trend may imply that in highly impoverished neighborhoods, college enrollment figures are either unreported or so low that they lack statistical visibility, creating a "data void" in the most vulnerable areas.A strong positive correlation exists between the Performance Policy Level and Safety Scores. This finding aligns with intuitive expectations, confirming that campus safety is a foundational element of a high-quality educational environment; top-rated schools consistently provide safer atmospheres for students.Regarding demographics, communities with an aging rate below 20% show no significant differentiation in instruction quality. The scarcity of samples in high-aging areas aligns with demographic reality: school locations are intrinsically linked to population structure. High-aging communities typically have fewer school-age children, resulting in lower demand for educational facilities. Consequently, aside from the few data points in high-aging zones, the scatter plot reveals no discernible linear correlation between community aging rates and instruction quality.
 
+
 #ML Anlysis
 ##decision tree
 ```{r}
@@ -374,6 +375,12 @@ ggplot(results_for_plot, aes(x = college_enrollment_rate, y = predicted_enrollme
 ```
 
 ### I initially employed a Decision Tree analysis to identify the primary drivers of college enrollment, which revealed that Safety Score was the most significant variable. This finding was subsequently corroborated by the XGBoost algorithm. I then trained the XGBoost model to predict college enrollment rates across CPS schools based on a broader set of variables. Validation metrics demonstrate that the model achieved a high degree of predictive accuracy.
+
+### Biases: The dataset suffers from "data voids," where college enrollment data is disproportionately missing in high-poverty neighborhoods. Additionally, safety scores may reflect policing bias rather than student well-being.
+
+### Impact: Ignoring these gaps renders the most vulnerable schools invisible to policymakers, leading to inequitable resource allocation and a "double penalty" where schools are punished for environmental factors they cannot control.
+
+### Responsible Presentation: To ensure fairness, I will visualize missing data to highlight the need for action rather than excluding it. I will clearly distinguish AI-imputed values from reported data and frame the findings to advocate for "Intervention Zones"—prioritizing safety resources over punitive academic mandates.
 
 
 
