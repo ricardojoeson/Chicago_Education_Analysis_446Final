@@ -93,13 +93,13 @@ leaflet() %>%
 #| echo: false
 
 
-local_school_data <- finaldata %>%
+local_school_data = finaldata %>%
   filter(community_area == params$community)
 
 
 if(nrow(local_school_data) > 0) {
-  avg_enroll <- mean(local_school_data$college_enrollment_rate, na.rm = TRUE)
-  avg_safety <- mean(local_school_data$safety_score, na.rm = TRUE)
+  avg_enroll = mean(local_school_data$college_enrollment_rate, na.rm = TRUE)
+  avg_safety = mean(local_school_data$safety_score, na.rm = TRUE)
   
   cat(paste0("**Community Summary:**\n\n",
              "- **Number of Schools:** ", nrow(local_school_data), "\n",
